@@ -1,0 +1,8 @@
+/build/
+/dist/
+/package/dinput8.dll
+/package/reframework/plugins/RE2MouseFix.dll
+*.pdb
+*.obj
+*.exp
+*.lib
