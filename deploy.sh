@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly app_id=883710
-readonly reframework_url="${RE2_REFRAMEWORK_URL:-https://github.com/praydog/REFramework/releases/download/v1.5.9.1/RE2.zip}"
+# Steam app 952060 is Resident Evil 3 Remake.
+readonly app_id=952060
+# The public DX12 build uses the RE3/TDB70 REFramework loader.
+readonly reframework_url="${RE3_REFRAMEWORK_URL:-https://github.com/praydog/REFramework/releases/download/v1.5.9.1/RE3.zip}"
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-steamapps_dir="${RE2_STEAMAPPS_DIR:-${HOME}/.local/share/Steam/steamapps}"
+steamapps_dir="${RE3_STEAMAPPS_DIR:-${HOME}/.local/share/Steam/steamapps}"
 manifest_path="${steamapps_dir}/appmanifest_${app_id}.acf"
 
 temporary_directory=''
@@ -21,7 +23,7 @@ is_reframework_loader() {
 
 if [[ ! -f "${manifest_path}" ]]; then
    printf 'Steam manifest not found: %s\n' "${manifest_path}" >&2
-   printf 'Set RE2_STEAMAPPS_DIR to the Steam library steamapps directory.\n' >&2
+   printf 'Set RE3_STEAMAPPS_DIR to the Steam library steamapps directory.\n' >&2
    exit 1
 fi
 
@@ -31,13 +33,13 @@ if [[ -z "${install_directory}" ]]; then
    exit 1
 fi
 
-game_dir="${RE2_GAME_DIR:-${steamapps_dir}/common/${install_directory}}"
-proton_prefix="${RE2_PROTON_PREFIX:-${steamapps_dir}/compatdata/${app_id}/pfx}"
-game_executable="${game_dir}/re2.exe"
-plugin_source="${project_dir}/build/RE2MouseFix.dll"
-plugin_destination="${game_dir}/reframework/plugins/RE2MouseFix.dll"
-configuration_source="${project_dir}/reframework/data/RE2MouseFix.ini"
-configuration_destination="${game_dir}/reframework/data/RE2MouseFix.ini"
+game_dir="${RE3_GAME_DIR:-${steamapps_dir}/common/${install_directory}}"
+proton_prefix="${RE3_PROTON_PREFIX:-${steamapps_dir}/compatdata/${app_id}/pfx}"
+game_executable="${game_dir}/re3.exe"
+plugin_source="${project_dir}/build/RE3MouseFix.dll"
+plugin_destination="${game_dir}/reframework/plugins/RE3MouseFix.dll"
+configuration_source="${project_dir}/reframework/data/RE3MouseFix.ini"
+configuration_destination="${game_dir}/reframework/data/RE3MouseFix.ini"
 loader_destination="${game_dir}/dinput8.dll"
 
 if [[ ! -f "${game_executable}" ]]; then
@@ -51,7 +53,7 @@ if [[ ! -f "${proton_prefix}/system.reg" || ! -d "${proton_prefix}/drive_c" ]]; 
    exit 1
 fi
 
-printf 'Building RE2MouseFix for x64...\n'
+printf 'Building RE3MouseFix for x64...\n'
 "${project_dir}/build.sh"
 
 if [[ ! -f "${plugin_source}" ]]; then
@@ -80,12 +82,12 @@ else
       exit 1
    fi
 
-   temporary_directory="$(mktemp -d "${TMPDIR:-/tmp}/re2-reframework.XXXXXX")"
-   loader_archive="${temporary_directory}/RE2.zip"
+   temporary_directory="$(mktemp -d "${TMPDIR:-/tmp}/re3-reframework.XXXXXX")"
+   loader_archive="${temporary_directory}/RE3.zip"
    loader_extract_directory="${temporary_directory}/extracted"
    loader_source="${loader_extract_directory}/dinput8.dll"
 
-   printf 'Downloading REFramework for Resident Evil 2...\n'
+   printf 'Downloading REFramework for Resident Evil 3...\n'
    curl --fail --location --retry 3 --silent --show-error \
       --output "${loader_archive}" "${reframework_url}"
    mkdir -p "${loader_extract_directory}"

@@ -30,5 +30,5 @@ exec lmsvc --2022 --arch x64 cl \
    /OPT:ICF \
    /Brepro \
    /NOIMPLIB \
-   /OUT:RE2MouseFix.dll \
-   /PDB:RE2MouseFix.pdb
+   /OUT:RE3MouseFix.dll \
+   /PDB:RE3MouseFix.pdb

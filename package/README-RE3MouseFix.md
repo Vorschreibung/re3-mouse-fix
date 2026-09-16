@@ -12,16 +12,10 @@ build has SHA-256:
 
 `54582f13e6e70cd312029e8dab6cab888708ab2b14b9d2fd6937fe39e153d1f9`
 
-## Installation on Steam/Proton
+## Installation
 
-Exit the game. With `lmsvc` and its Visual Studio 2022 toolchain installed, run:
-
-```sh
-./deploy.sh
-```
-
-The script reads Steam app 952060's manifest, builds the plugin, and installs
-these files beside `re3.exe` in the game directory:
+Exit the game, then extract this package into the directory containing
+`re3.exe`. The resulting files are:
 
 ```text
 dinput8.dll
@@ -29,12 +23,10 @@ reframework/plugins/RE3MouseFix.dll
 reframework/data/RE3MouseFix.ini
 ```
 
-It installs only `dinput8.dll` from the official non-VR REFramework `RE3.zip`
-release. If Steam uses another library, set `RE3_STEAMAPPS_DIR` to that
-library's `steamapps` directory. `RE3_GAME_DIR`, `RE3_PROTON_PREFIX`, and
-`RE3_REFRAMEWORK_URL` can override the derived locations and download URL.
+Only `dinput8.dll` from the official non-VR REFramework `RE3.zip` release is
+included; its VR DLLs and scripts are omitted.
 
-Set this launch option in the game's Steam Properties dialog:
+For Steam/Proton, set this launch option in the game's Properties dialog:
 
 ```text
 WINEDLLOVERRIDES="dinput8.dll=n,b" %command%
@@ -42,13 +34,6 @@ WINEDLLOVERRIDES="dinput8.dll=n,b" %command%
 
 On the first launch, search `re2_framework_log.txt` in the game directory for
 `[RE3MouseFix] Initialization complete` to confirm that the plugin loaded.
-
-## Manual installation
-
-Build the plugin with `./build.sh`, then copy `build/RE3MouseFix.dll` and
-`reframework/data/RE3MouseFix.ini` to the paths above. Install `dinput8.dll`
-from the official REFramework `RE3.zip` release if the game does not already
-have a REFramework loader.
 
 ## Configuration
 
@@ -67,17 +52,7 @@ reframework/data/RE3MouseFix.ini
 Remove `dinput8.dll` only if no other REFramework mods use it. Remove the
 Proton DLL override if REFramework is no longer installed.
 
-## Building
-
-On Linux with `lmsvc` and its Visual Studio 2022 toolchain, run `./build.sh`.
-The output is `build/RE3MouseFix.dll`. The source vendors the two REFramework
-plugin API headers, so no package manager is needed.
-
-On Windows, configure `CMakeLists.txt` in a 64-bit Visual Studio developer
-prompt and build the `RE3MouseFix` target. The code is C++20 and uses the
-dynamic release CRT.
-
 ## Credits and licensing
 
 RE3MouseFix is MIT licensed. See `THIRD_PARTY_NOTICES.md` and the license files
-under `third_party/licenses` for REFramework and REFix attribution.
+under `licenses` for REFramework and REFix attribution.

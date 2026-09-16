@@ -4,6 +4,7 @@
 #include <reframework/API.hpp>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -15,16 +16,16 @@ namespace {
 namespace fs = std::filesystem;
 using API = reframework::API;
 
-constexpr const char* kPrefix = "app.ropeway";
-constexpr const char* kPluginName = "RE2MouseFix";
+// RE3's managed game types use the offline namespace.
+constexpr const char* kPrefix = "offline";
 constexpr unsigned int kMaximumKeyFrames = 1024;
 constexpr unsigned int kMaximumValueTypeSize = 4096;
 constexpr unsigned int kInitializationAttempts = 120;
 constexpr DWORD kInitializationDelayMs = 500;
 
-#define LOG_INFO(...) API::get()->log_info("[RE2MouseFix] " __VA_ARGS__)
-#define LOG_WARN(...) API::get()->log_warn("[RE2MouseFix] " __VA_ARGS__)
-#define LOG_ERROR(...) API::get()->log_error("[RE2MouseFix] " __VA_ARGS__)
+#define LOG_INFO(...) API::get()->log_info("[RE3MouseFix] " __VA_ARGS__)
+#define LOG_WARN(...) API::get()->log_warn("[RE3MouseFix] " __VA_ARGS__)
+#define LOG_ERROR(...) API::get()->log_error("[RE3MouseFix] " __VA_ARGS__)
 
 enum class InitResult {
     success,
@@ -82,7 +83,7 @@ bool read_bool(const fs::path& ini, const wchar_t* key, bool default_value) {
 }
 
 Config load_config() {
-    const fs::path ini = executable_directory() / L"reframework" / L"data" / L"RE2MouseFix.ini";
+    const fs::path ini = executable_directory() / L"reframework" / L"data" / L"RE3MouseFix.ini";
     Config config{};
     config.linearize_input_curve = read_bool(ini, L"LinearizeInputCurve", true);
     config.remove_camera_damping = read_bool(ini, L"RemoveCameraDamping", true);
@@ -236,59 +237,72 @@ InitResult apply_camera_fixes() {
         return InitResult::retry;
     }
 
-    auto* const controller = get_camera_controller->call<API::ManagedObject*>(vm, camera_system, 0);
-    if (controller == nullptr) {
-        return InitResult::retry;
-    }
+    // RE3 keeps normal and sight aiming cameras in slots 0 and 1.
+    std::array<API::ManagedObject*, 2> controllers{};
+    std::array<API::ManagedObject*, 2> settings{};
+    for (std::size_t index = 0; index < controllers.size(); ++index) {
+        controllers[index] = get_camera_controller->call<API::ManagedObject*>(
+            vm, camera_system, static_cast<int>(index)
+        );
+        if (controllers[index] == nullptr) {
+            return InitResult::retry;
+        }
 
-    auto* const settings = read_managed_field(controller, "TwirlerCameraSettings");
-    if (settings == nullptr) {
-        return InitResult::retry;
-    }
-
-    if (g_config.linearize_input_curve) {
-        auto* const input_curve = read_managed_field(settings, "InputCurve");
-        if (input_curve == nullptr || !mutate_curve(input_curve, false, "camera input response curve")) {
-            return InitResult::fatal;
+        settings[index] = read_managed_field(controllers[index], "TwirlerCameraSettings");
+        if (settings[index] == nullptr) {
+            return InitResult::retry;
         }
     }
 
-    if (g_config.remove_pitch_scaling) {
-        auto* const normal_speed = read_managed_field(settings, "NormalSpeedCurve");
-        auto* const hold_speed = read_managed_field(settings, "HoldSpeedCurve");
-
-        if (normal_speed == nullptr || hold_speed == nullptr ||
-            !mutate_curve(normal_speed, true, "normal horizontal speed curve") ||
-            !mutate_curve(hold_speed, true, "aiming horizontal speed curve")) {
-            return InitResult::fatal;
-        }
-    }
-
+    API::Field* damping_time{};
     if (g_config.remove_camera_damping) {
-        const std::string damping_type_name = std::string{kPrefix} + ".DampingStruct`1<System.Single>";
+        const std::string damping_type_name = std::string{kPrefix} + ".DampingStruct`1";
         auto* const damping_type = tdb->find_type(damping_type_name);
-
-        if (!require_pointer(damping_type, "DampingStruct<System.Single>")) {
+        if (!require_pointer(damping_type, "DampingStruct`1")) {
             return InitResult::fatal;
         }
 
-        auto* const damping_time = damping_type->find_field("DampingTime");
+        damping_time = damping_type->find_field("DampingTime");
         if (!require_pointer(damping_time, "DampingStruct.DampingTime")) {
             return InitResult::fatal;
         }
+    }
 
-        auto* const yaw = read_managed_field(controller, "<TwirlSpeedYaw>k__BackingField");
-        auto* const pitch = read_managed_field(controller, "<TwirlSpeedPitch>k__BackingField");
+    for (std::size_t index = 0; index < controllers.size(); ++index) {
+        LOG_INFO("Patching %s camera (slot %zu)", index == 0 ? "normal" : "sight", index);
 
-        if (yaw == nullptr || pitch == nullptr) {
-            return InitResult::fatal;
+        if (g_config.linearize_input_curve) {
+            auto* const input_curve = read_managed_field(settings[index], "InputCurve");
+            if (input_curve == nullptr || !mutate_curve(input_curve, false, "camera input response curve")) {
+                return InitResult::fatal;
+            }
         }
 
-        const float old_yaw = damping_time->get_data<float>(yaw);
-        const float old_pitch = damping_time->get_data<float>(pitch);
-        damping_time->get_data<float>(yaw) = 0.0F;
-        damping_time->get_data<float>(pitch) = 0.0F;
-        LOG_INFO("Removed camera damping (yaw %.6f, pitch %.6f -> 0)", old_yaw, old_pitch);
+        if (g_config.remove_pitch_scaling) {
+            auto* const normal_speed = read_managed_field(settings[index], "NormalSpeedCurve");
+            auto* const hold_speed = read_managed_field(settings[index], "HoldSpeedCurve");
+
+            if (normal_speed == nullptr || hold_speed == nullptr ||
+                !mutate_curve(normal_speed, true, "normal horizontal speed curve") ||
+                !mutate_curve(hold_speed, true, "aiming horizontal speed curve")) {
+                return InitResult::fatal;
+            }
+        }
+
+        if (damping_time != nullptr) {
+            auto* const yaw = read_managed_field(controllers[index], "<TwirlSpeedYaw>k__BackingField");
+            auto* const pitch = read_managed_field(controllers[index], "<TwirlSpeedPitch>k__BackingField");
+
+            if (yaw == nullptr || pitch == nullptr) {
+                return InitResult::fatal;
+            }
+
+            const float old_yaw = damping_time->get_data<float>(yaw);
+            const float old_pitch = damping_time->get_data<float>(pitch);
+            damping_time->get_data<float>(yaw) = 0.0F;
+            damping_time->get_data<float>(pitch) = 0.0F;
+            LOG_INFO("Removed camera %zu damping (yaw %.6f, pitch %.6f -> 0)", index, old_yaw, old_pitch);
+        }
     }
 
     return InitResult::success;
@@ -390,7 +404,7 @@ extern "C" __declspec(dllexport) void reframework_plugin_required_version(
     version->major = REFRAMEWORK_PLUGIN_VERSION_MAJOR;
     version->minor = REFRAMEWORK_PLUGIN_VERSION_MINOR;
     version->patch = REFRAMEWORK_PLUGIN_VERSION_PATCH;
-    version->game_name = "RE2";
+    version->game_name = "RE3";
 }
 
 extern "C" __declspec(dllexport) bool reframework_plugin_initialize(
@@ -403,7 +417,7 @@ extern "C" __declspec(dllexport) bool reframework_plugin_initialize(
         api_initialized = true;
         g_config = load_config();
 
-        LOG_INFO("Version 1.0.0 initializing for RE2 TDB70");
+        LOG_INFO("Version 1.0.0 initializing for RE3 TDB70");
         LOG_INFO(
             "Settings: curve=%d damping=%d pitch-scaling=%d magnitude=%d",
             g_config.linearize_input_curve,
@@ -426,7 +440,7 @@ extern "C" __declspec(dllexport) bool reframework_plugin_initialize(
             }
 
             if (attempt == 0 || (attempt + 1) % 10 == 0) {
-                LOG_INFO("Waiting for RE2 camera/input singletons (%u/%u)", attempt + 1, kInitializationAttempts);
+                LOG_INFO("Waiting for RE3 camera/input singletons (%u/%u)", attempt + 1, kInitializationAttempts);
             }
 
             Sleep(kInitializationDelayMs);
