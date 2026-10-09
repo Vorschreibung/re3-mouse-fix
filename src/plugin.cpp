@@ -256,9 +256,10 @@ InitResult apply_camera_fixes() {
 
     API::Field* damping_time{};
     if (g_config.remove_camera_damping) {
-        const std::string damping_type_name = std::string{kPrefix} + ".DampingStruct`1";
+        // RE3 exposes the generic damping value as its closed Single type in TypeDB.
+        const std::string damping_type_name = std::string{kPrefix} + ".DampingStruct`1<System.Single>";
         auto* const damping_type = tdb->find_type(damping_type_name);
-        if (!require_pointer(damping_type, "DampingStruct`1")) {
+        if (!require_pointer(damping_type, "DampingStruct`1<System.Single>")) {
             return InitResult::fatal;
         }
 
